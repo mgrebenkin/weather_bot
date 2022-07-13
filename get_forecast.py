@@ -9,69 +9,56 @@ usr_lon = MOSCOW_LON
 usr_lang = 'ru_RU'
 
 forecast_data = dict.fromkeys(['morning', 'day', 'evening', 'night'])
-cond_description = {
-'clear': 'Ясно',
-'partly-cloudy': 'Малооблачно',
-'cloudy': 'Облачно с прояснениями',
-'overcast': 'Пасмурно',
-'drizzle': 'Морось',
-'light-rain': 'Небольшой дождь',
-'rain': 'Дождь',
-'moderate-rain': 'Умеренно сильный дождь',
-'heavy-rain': 'Сильный дождь',
-'continuous-heavy-rain': 'Длительный сильный дождь',
-'showers': 'Ливень',
-'wet-snow': 'Дождь со снегом',
-'light-snow': 'Небольшой снег',
-'snow': 'Снег',
-'snow-showers': 'Снегопад',
-'hail': 'Град',
-'thunderstorm': 'Гроза',
-'thunderstorm-with-rain': 'Дождь с грозой',
-'thunderstorm-with-hail': 'Гроза с градом'}
+cond_description = json.load(
+    open('weather_cond_description.json', 'r', encoding='utf-8'))
 
-payload = {'lat':usr_lat, 'lon':usr_lon, 'lang':usr_lang, 'limit':1}
-with open('yandex_weather_api_key.txt','r') as file:
-    YANDEX_WEATHER_API_KEY = file.readline()
-YANDEX_WEATHER_REQUEST_URL = 'https://api.weather.yandex.ru/v2/forecast'
-weather_response = requests.get(YANDEX_WEATHER_REQUEST_URL, 
-    params=payload, 
-    headers={'X-Yandex-API-Key':YANDEX_WEATHER_API_KEY})
-weather_response_json = weather_response.json()
-with open('weather_response.json', 'w') as weather_response_file:
-    json.dump(weather_response_json, weather_response_file, 
-    ensure_ascii=False, sort_keys=True, indent=4)
-parts_for_day = weather_response_json['forecasts'][0]['parts']
 
-forecast_message_greeting = f"Привет! Вот прогноз погоды на {weather_response_json['forecasts'][0]['date']}:"
-forecast_message_morning = \
-f"Утро\nСредняя температура: {parts_for_day['morning']['temp_avg']} C\n \
-Ощущается как {parts_for_day['morning']['feels_like']} C\n \
-{cond_description[parts_for_day['morning']['condition']]}\n \
-Скорость ветра: {parts_for_day['morning']['wind_speed']} м/с\n \
-Индекс УФ-излучения: {parts_for_day['morning']['uv_index']}\n"
+def get_forecast_text(days_from_now: int) -> str:
+    payload = {'lat': usr_lat,
+               'lon': usr_lon,
+               'lang': usr_lang,
+               'limit': days_from_now + 1}
 
-forecast_message_day = \
-f"День\nСредняя температура: {parts_for_day['day']['temp_avg']} C\n \
-Ощущается как {parts_for_day['day']['feels_like']} C\n \
-{cond_description[parts_for_day['day']['condition']]}\n \
-Скорость ветра: {parts_for_day['day']['wind_speed']} м/с\n \
-Индекс УФ-излучения: {parts_for_day['day']['uv_index']}\n"
+    with open('yandex_weather_api_key.txt', 'r') as file:
+        YANDEX_WEATHER_API_KEY = file.readline()
+    YANDEX_WEATHER_REQUEST_URL = 'https://api.weather.yandex.ru/v2/forecast'
+    weather_response = requests.get(YANDEX_WEATHER_REQUEST_URL,
+                                    params=payload,
+                                    headers={'X-Yandex-API-Key': YANDEX_WEATHER_API_KEY})
 
-forecast_message_evening = \
-f"Вечер\nСредняя температура: {parts_for_day['evening']['temp_avg']} C\n \
-Ощущается как {parts_for_day['evening']['feels_like']} C\n \
-{cond_description[parts_for_day['evening']['condition']]}\n \
-Скорость ветра: {parts_for_day['evening']['wind_speed']} м/с\n \
-Индекс УФ-излучения: {parts_for_day['evening']['uv_index']}\n"
+    parts_for_day = \
+        weather_response.json()['forecasts'][days_from_now]['parts']
 
-print(forecast_message_greeting)
-print(forecast_message_morning)
-print(forecast_message_day)
-print(forecast_message_evening)
+    forecast_message_greeting = \
+        f"Привет! Вот прогноз погоды на \
+        {weather_response.json()['forecasts'][days_from_now]['date']}:\n"
 
-'''Средняя температура
- ощущается как
- характер погоды
- скорость ветра
- индекс УФ'''
+    forecast_message_morning = \
+    f"Утро\n    Средняя температура: {parts_for_day['morning']['temp_avg']}C\n\
+    Ощущается как {parts_for_day['morning']['feels_like']}C\n\
+    {cond_description[parts_for_day['morning']['condition']]}\n\
+    Скорость ветра: {parts_for_day['morning']['wind_speed']} м/с\n\
+    Индекс УФ-излучения: {parts_for_day['morning']['uv_index']}\n\n"
+
+    forecast_message_day = \
+    f"День\n    Средняя температура: {parts_for_day['day']['temp_avg']}C\n\
+    Ощущается как {parts_for_day['day']['feels_like']}C\n\
+    {cond_description[parts_for_day['day']['condition']]}\n\
+    Скорость ветра: {parts_for_day['day']['wind_speed']} м/с\n\
+    Индекс УФ-излучения: {parts_for_day['day']['uv_index']}\n\n"
+
+    forecast_message_evening = \
+    f"Вечер\n    Средняя температура: {parts_for_day['evening']['temp_avg']}C\n\
+    Ощущается как {parts_for_day['evening']['feels_like']}C\n\
+    {cond_description[parts_for_day['evening']['condition']]}\n\
+    Скорость ветра: {parts_for_day['evening']['wind_speed']} м/с\n\
+    Индекс УФ-излучения: {parts_for_day['evening']['uv_index']}\n\n"
+
+    return forecast_message_greeting + \
+        forecast_message_morning \
+        + forecast_message_day \
+        + forecast_message_evening
+
+
+if __name__ == '__main__':
+    print(get_forecast_text(1))
