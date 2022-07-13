@@ -30,8 +30,8 @@ def get_forecast_text(days_from_now: int) -> str:
         weather_response.json()['forecasts'][days_from_now]['parts']
 
     forecast_message_greeting = \
-        f"Привет! Вот прогноз погоды на \
-        {weather_response.json()['forecasts'][days_from_now]['date']}:\n"
+        "Привет! Вот прогноз погоды на " + \
+        f"{weather_response.json()['forecasts'][days_from_now]['date']}:\n"
 
     forecast_message_morning = \
     f"Утро\n    Средняя температура: {parts_for_day['morning']['temp_avg']}C\n\
