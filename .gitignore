@@ -1,4 +1,7 @@
+__pycache__/
+venv/
 weather_response.json
-weather_bot_env
-weather_bot_env/*
+weather_bot_env/
 yandex_weather_api_key.txt
+TG_BOT_API_TOKEN.txt
+username_white_list.json
