@@ -1,6 +1,7 @@
 import requests
 import json
 
+
 MOSCOW_LAT = 55
 MOSCOW_LON = 37
 
@@ -8,9 +9,15 @@ usr_lat = MOSCOW_LAT
 usr_lon = MOSCOW_LON
 usr_lang = 'ru_RU'
 
+
 forecast_data = dict.fromkeys(['morning', 'day', 'evening', 'night'])
-cond_description = json.load(
-    open('weather_cond_description.json', 'r', encoding='utf-8'))
+try:
+    cond_description = json.load(
+        open('weather_cond_description.json', 'r', encoding='utf-8'))
+    with open('yandex_weather_api_key.txt', 'r') as file:
+        YANDEX_WEATHER_API_KEY = file.readline()
+except OSError as e:
+    print(f"Ошибка чтения файла {e.filename}:\n {e.strerror}")
 
 
 def get_forecast_text(days_from_now: int) -> str:
@@ -19,15 +26,26 @@ def get_forecast_text(days_from_now: int) -> str:
                'lang': usr_lang,
                'limit': days_from_now + 1}
 
-    with open('yandex_weather_api_key.txt', 'r') as file:
-        YANDEX_WEATHER_API_KEY = file.readline()
     YANDEX_WEATHER_REQUEST_URL = 'https://api.weather.yandex.ru/v2/forecast'
-    weather_response = requests.get(YANDEX_WEATHER_REQUEST_URL,
-                                    params=payload,
-                                    headers={'X-Yandex-API-Key': YANDEX_WEATHER_API_KEY})
+    try:
+        weather_response = requests.get(YANDEX_WEATHER_REQUEST_URL,
+                                        params=payload,
+                                        headers={'X-Yandex-API-Key': YANDEX_WEATHER_API_KEY},
+                                        timeout=10)
+        weather_response.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        print(f"Ошибка HTTP:\n{e.strerror}")
+        return "Не удалось получить прогноз."
+    except requests.exceptions.RequestException as e:
+        print(f"Ошибка соединения с сервером погоды:\n{e.strerror}")
+        return "Не удалось получить прогноз."   
 
-    parts_for_day = \
-        weather_response.json()['forecasts'][days_from_now]['parts']
+    try:
+        parts_for_day = \
+            weather_response.json()['forecasts'][days_from_now]['parts']
+    except LookupError as e:
+        print("Отсутвует информация о нужном дне или JSON пустой.")
+        return "Не удалось получить прогноз."
 
     forecast_message_greeting = \
         "Привет! Вот прогноз погоды на " + \

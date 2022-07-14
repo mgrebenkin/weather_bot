@@ -1,23 +1,33 @@
 from aiogram import Bot, Dispatcher, executor, types
+import aiogram
 import aioschedule
 import asyncio
 import json
+
 import get_forecast
 
-with open('TG_BOT_API_TOKEN.txt', 'r') as file:
-    TG_BOT_API_TOKEN = file.readline()
 
-username_white_list = json.load(
-    open('username_white_list.json', 'r', encoding='utf-8'))
+try:
+    '''Получение токена бота из файла, подключение к API телеграма и инициализация диспетчера'''
+    with open('TG_BOT_API_TOKEN.txt', 'r') as file:  
+        TG_BOT_API_TOKEN = file.readline()
 
-bot = Bot(token=TG_BOT_API_TOKEN)
-dp = Dispatcher(bot)
+    bot = Bot(token=TG_BOT_API_TOKEN)
+    dp = Dispatcher(bot)
 
-subscribers_for_daily_forecast=set()
+    username_white_list = json.load(
+        open('username_white_list.json', 'r', encoding='utf-8'))
+except OSError as e:
+    print(f"Ошибка чтения файла {e.filename}")
+except Exception as e:
+    print(f"Ошибка инициализации бота")
+
+subscribers_for_daily_forecast = set()
 DAILY_FORECAST_TIME = '20:00'
 TASK_LOOP_PERIOD = 30 # seconds
 
-def auth(func):
+
+def auth(func): 
 
     async def wrapper(message):
         if message.from_user.username in username_white_list:
@@ -26,7 +36,7 @@ def auth(func):
 
     return wrapper
 
-
+ 
 @dp.message_handler(commands=['start', 'help'])
 @auth
 async def greeting_reply(message: types.Message):
@@ -49,9 +59,9 @@ async def send_tomorrow_forecast(message: types.Message):
 
 
 async def do_daily_forecasting(message: types.Message):
-    
+
     aioschedule.every().day.at(DAILY_FORECAST_TIME).do(send_tomorrow_forecast, message=message)
-    while  message.from_user.username in subscribers_for_daily_forecast:
+    while message.from_user.username in subscribers_for_daily_forecast:
         await aioschedule.run_pending()
         await asyncio.sleep(TASK_LOOP_PERIOD)
 
@@ -62,7 +72,6 @@ async def start_daily_forecasting(message: types.Message):
     subscribers_for_daily_forecast.add(message.from_user.username)
     await bot.send_message(message.from_user.id, f'Ты подписан на ежедневный прогноз в {DAILY_FORECAST_TIME}.')
     asyncio.create_task(do_daily_forecasting(message))
-    
 
 
 @dp.message_handler(commands=['unsubscribe'])
@@ -78,13 +87,16 @@ async def stop_daily_forecasting(message: types.Message):
 @dp.message_handler()
 @auth
 async def unknown_command_answer(message: types.Message):
-    await message.reply('Напиши /today для прогноза на сегодня и /tomorrow для прогноза на завтра.\n'+
+    await message.reply('Напиши /today для прогноза на сегодня и /tomorrow для прогноза на завтра.\n' +
         'Напиши /subscribe, чтобы подписаться на ежедневный и напиши /unsubscribe, чтобы отписаться.')
 
 
 async def startup_routine():
-    pass
+    raise NotImplementedError
 
 
 if __name__ == '__main__':
-    executor.start_polling(dp, skip_updates=True)
+    try:
+        executor.start_polling(dp, skip_updates=True)
+    except aiogram.utils.exceptions.Unauthorized as e:
+        print(f"Не удалось авторизовать бота:\n{e.text}")
