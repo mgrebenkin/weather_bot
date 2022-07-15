@@ -1,6 +1,7 @@
 __pycache__/
 TODO.txt
 venv/
+.env
 weather_response.json
 weather_bot_env/
 yandex_weather_api_key.txt

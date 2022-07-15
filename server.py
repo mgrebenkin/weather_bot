@@ -3,14 +3,17 @@ import aiogram
 import aioschedule
 import asyncio
 import json
+from dotenv import load_dotenv, find_dotenv
+import os
 
 import get_forecast
-
-
+import exceptions
+'''Получение токена бота из файла, подключение к API телеграма и инициализация диспетчера'''
 try:
-    '''Получение токена бота из файла, подключение к API телеграма и инициализация диспетчера'''
-    with open('TG_BOT_API_TOKEN.txt', 'r') as file:  
-        TG_BOT_API_TOKEN = file.readline()
+    load_dotenv(find_dotenv())
+    TG_BOT_API_TOKEN=os.getenv('TG_BOT_API_TOKEN')
+    if TG_BOT_API_TOKEN is None : 
+        raise exceptions.GettingEnvVarError('Не удалось получить токен бота')
 
     bot = Bot(token=TG_BOT_API_TOKEN)
     dp = Dispatcher(bot)
@@ -20,7 +23,7 @@ try:
 except OSError as e:
     print(f"Ошибка чтения файла {e.filename}")
 except Exception as e:
-    print(f"Ошибка инициализации бота")
+    print(f"Ошибка инициализации бота:\n{e}")
 
 subscribers_for_daily_forecast = set()
 DAILY_FORECAST_TIME = '20:00'
