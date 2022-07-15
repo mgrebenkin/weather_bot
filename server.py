@@ -3,14 +3,19 @@ import aiogram
 import aioschedule
 import asyncio
 import json
+from dotenv import load_dotenv, find_dotenv
+import os
 
 import get_forecast
+import exceptions
 
+'''Получение токена бота из файла, подключение к API телеграма и инициализация диспетчера'''
+load_dotenv(find_dotenv())
 
 try:
-    '''Получение токена бота из файла, подключение к API телеграма и инициализация диспетчера'''
-    with open('TG_BOT_API_TOKEN.txt', 'r') as file:  
-        TG_BOT_API_TOKEN = file.readline()
+    TG_BOT_API_TOKEN = os.getenv('TG_BOT_API_TOKEN')
+    if TG_BOT_API_TOKEN is None : 
+        raise exceptions.GettingEnvVarError('Не удалось получить токен бота')
 
     bot = Bot(token=TG_BOT_API_TOKEN)
     dp = Dispatcher(bot)
@@ -20,14 +25,14 @@ try:
 except OSError as e:
     print(f"Ошибка чтения файла {e.filename}")
 except Exception as e:
-    print(f"Ошибка инициализации бота")
+    print(f"Ошибка инициализации бота:\n{e}")
 
 subscribers_for_daily_forecast = set()
 DAILY_FORECAST_TIME = '20:00'
-TASK_LOOP_PERIOD = 30 # seconds
+TASK_LOOP_PERIOD = 30  #seconds
 
 
-def auth(func): 
+def auth(func):
 
     async def wrapper(message):
         if message.from_user.username in username_white_list:
@@ -36,11 +41,11 @@ def auth(func):
 
     return wrapper
 
- 
+
 @dp.message_handler(commands=['start', 'help'])
 @auth
 async def greeting_reply(message: types.Message):
-    await message.reply('Напиши /today для прогноза на сегодня и /tomorrow для прогноза на завтра.\n'+
+    await message.reply('Напиши /today для прогноза на сегодня и /tomorrow для прогноза на завтра.\n' +
         'Напиши /subscribe, чтобы подписаться на ежедневный и напиши /unsubscribe, чтобы отписаться.')
 
 

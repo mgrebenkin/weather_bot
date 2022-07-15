@@ -1,5 +1,8 @@
 import requests
 import json
+import os
+
+import exceptions
 
 
 MOSCOW_LAT = 55
@@ -11,16 +14,20 @@ usr_lang = 'ru_RU'
 
 
 forecast_data = dict.fromkeys(['morning', 'day', 'evening', 'night'])
-try:
-    cond_description = json.load(
-        open('weather_cond_description.json', 'r', encoding='utf-8'))
-    with open('yandex_weather_api_key.txt', 'r') as file:
-        YANDEX_WEATHER_API_KEY = file.readline()
-except OSError as e:
-    print(f"Ошибка чтения файла {e.filename}:\n {e.strerror}")
 
 
 def get_forecast_text(days_from_now: int) -> str:
+    try:
+        YANDEX_WEATHER_API_KEY = os.getenv('YANDEX_WEATHER_API_KEY')
+        if YANDEX_WEATHER_API_KEY is None:
+            raise exceptions.GettingEnvVarError('Не удалось получить API-ключ сервиса прогноза погоды')
+
+        cond_description = json.load(
+            open('weather_cond_description.json', 'r', encoding='utf-8'))
+    except OSError as e:
+        print(f"Ошибка чтения файла {e.filename}:\n {e.strerror}")
+    except exceptions.GettingEnvVarError as e:
+        print(e)
     payload = {'lat': usr_lat,
                'lon': usr_lon,
                'lang': usr_lang,
