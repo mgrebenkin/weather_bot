@@ -14,7 +14,7 @@ load_dotenv(find_dotenv())
 
 try:
     TG_BOT_API_TOKEN = os.getenv('TG_BOT_API_TOKEN')
-    if TG_BOT_API_TOKEN is None : 
+    if TG_BOT_API_TOKEN is None: 
         raise exceptions.GettingEnvVarError('Не удалось получить токен бота.')
     bot = Bot(token=TG_BOT_API_TOKEN)
     dp = Dispatcher(bot)
@@ -31,7 +31,7 @@ except OSError as e:
 
 subscribers_for_daily_forecast = set()
 DAILY_FORECAST_TIME = '20:00'
-TASK_LOOP_PERIOD = 30  #seconds
+TASK_LOOP_PERIOD = 30  # seconds
 
 
 def auth(func):
@@ -55,15 +55,14 @@ async def greeting_reply(message: types.Message):
 @auth
 async def forecast_answer(message: types.Message):
     if message.text == '/today':
-        forecast_answer_text = get_forecast.get_forecast_text(0)
+        forecast_answer_text = get_forecast.get_forecast_for_day(0)
     elif message.text == '/tomorrow':
-        forecast_answer_text = get_forecast.get_forecast_text(1)
+        forecast_answer_text = get_forecast.get_forecast_for_day(1)
     await message.answer(forecast_answer_text)
 
 
 async def send_tomorrow_forecast(message: types.Message):
-    await bot.send_message(message.from_user.id, get_forecast.get_forecast_text(1))
-
+    await bot.send_message(message.from_user.id, get_forecast.get_forecast_for_day(1))
 
 async def do_daily_forecasting(message: types.Message):
 
@@ -99,7 +98,6 @@ async def unknown_command_answer(message: types.Message):
 
 
 async def startup_routine(_):
-#    raise NotImplementedError
     print("Бот авторизован и запущен.")
 
 
@@ -109,5 +107,3 @@ if __name__ == '__main__':
     except aiogram.utils.exceptions.Unauthorized as e:
         print(f"Не удалось авторизовать бота:\n{e.text}")
     
-    
-
