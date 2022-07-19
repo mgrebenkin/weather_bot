@@ -18,6 +18,8 @@ try:
         raise exceptions.GettingEnvVarError('Не удалось получить токен бота.')
     bot = Bot(token=TG_BOT_API_TOKEN)
     dp = Dispatcher(bot)
+except exceptions.GettingEnvVarError as e:
+    print(f"Ошибка доступа к переменной окружения:\n{e}")
 except Exception as e:
     print(f"Ошибка инициализации бота:\n{e}")
 else:
@@ -72,7 +74,7 @@ async def do_daily_forecasting(message: types.Message):
         await asyncio.sleep(TASK_LOOP_PERIOD)
 
 
-@dp.message_handler(commands=['subscribe'])
+@dp.message_handler(commands=['subscribe', 'sub'])
 @auth
 async def start_daily_forecasting(message: types.Message):
     subscribers_for_daily_forecast.add(message.from_user.username)
@@ -80,7 +82,7 @@ async def start_daily_forecasting(message: types.Message):
     asyncio.create_task(do_daily_forecasting(message))
 
 
-@dp.message_handler(commands=['unsubscribe'])
+@dp.message_handler(commands=['unsubscribe', 'unsub'])
 @auth
 async def stop_daily_forecasting(message: types.Message):
     if message.from_user.username in subscribers_for_daily_forecast:
@@ -94,7 +96,7 @@ async def stop_daily_forecasting(message: types.Message):
 @auth
 async def unknown_command_answer(message: types.Message):
     await message.reply('Напиши /today для прогноза на сегодня и /tomorrow для прогноза на завтра.\n' +
-        'Напиши /subscribe, чтобы подписаться на ежедневный и напиши /unsubscribe, чтобы отписаться.')
+        'Напиши /subscribe или /sub чтобы подписаться на ежедневный и напиши /unsubscribe или /unsub, чтобы отписаться.')
 
 
 async def startup_routine(_):

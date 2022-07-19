@@ -32,7 +32,7 @@ def get_forecast_from_API(up_to_days_from_now: int=1) -> Any:
         if YANDEX_WEATHER_API_KEY is None:
             raise exceptions.GettingEnvVarError('Не удалось получить API-ключ сервиса прогноза погоды') 
     except exceptions.GettingEnvVarError as e:
-        print(e)
+        print(f"Ошибка доступа к переменной окружения:\n{e}")
     payload = {'lat': usr_lat,
                'lon': usr_lon,
                'lang': usr_lang,
