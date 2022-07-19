@@ -11,6 +11,7 @@ import os
 
 import get_forecast
 import exceptions
+from util import set_format_str
 
 '''Получение токена бота из файла, подключение к API телеграма и инициализация диспетчера'''
 load_dotenv(find_dotenv())
@@ -36,7 +37,7 @@ except OSError as e:
 
 subscribers_for_daily_forecast = set()
 DAILY_FORECAST_TIME = '20:00'
-TASK_LOOP_PERIOD = 30  # seconds
+TASK_LOOP_PERIOD = 1  # seconds
 
 
 def auth(func):
@@ -65,17 +66,23 @@ async def forecast_answer(message: types.Message):
         forecast_answer_text = get_forecast.get_forecast_for_day(1)
     await message.answer(forecast_answer_text)
 
+async def send_test_message(message: types.Message):
+    await bot.send_message(message.from_user.id, "Test")
+
 
 async def send_tomorrow_forecast(message: types.Message):
     await bot.send_message(message.from_user.id, get_forecast.get_forecast_for_day(1))
 
+
 async def do_daily_forecasting(message: types.Message):
 
-    aioschedule.every().day.at(DAILY_FORECAST_TIME).do(send_tomorrow_forecast, message=message)
+    #aioschedule.every().day.at(DAILY_FORECAST_TIME).do(send_tomorrow_forecast, message=message)
+    aioschedule.every(3).seconds.do(send_test_message, message=message)
     while message.from_user.username in subscribers_for_daily_forecast:
         await aioschedule.run_pending()
         await asyncio.sleep(TASK_LOOP_PERIOD)
-
+    logger.info(f"Корутина завершена для пользователя {message.from_user.username}\nВсе задачи: {set_format_str(asyncio.all_tasks())}")
+    asyncio.Task.get_name
 
 @dp.message_handler(commands=['subscribe', 'sub'])
 @auth
@@ -83,6 +90,10 @@ async def start_daily_forecasting(message: types.Message):
     subscribers_for_daily_forecast.add(message.from_user.username)
     await bot.send_message(message.from_user.id, f'Ты подписан на ежедневный прогноз в {DAILY_FORECAST_TIME}.')
     asyncio.create_task(do_daily_forecasting(message))
+    logger.info(f'''Создана задача для пользователя {message.from_user.username}! 
+        Все задачи: {set_format_str(asyncio.all_tasks())}\n
+        Список подписавшихся: {subscribers_for_daily_forecast}''')
+
 
 
 @dp.message_handler(commands=['unsubscribe', 'unsub'])
@@ -93,6 +104,14 @@ async def stop_daily_forecasting(message: types.Message):
         await bot.send_message(message.from_user.id, 'Ты отписан от ежедневного прогноза.')
     else:
         await bot.send_message(message.from_user.id, 'Ты не подписан на ежедневный прогноз.')
+    logger.info(f"Пользователь отписан. Список подписавшихся: {subscribers_for_daily_forecast}\nВсе задачи: {set_format_str(asyncio.all_tasks())}")
+
+
+@dp.message_handler(commands='debug')
+@auth
+async def log_debug_info(message: types.Message):
+    logger.info(f"Информация для дебаггинга\nСписок подписавшихся: {subscribers_for_daily_forecast}\nВсе задачи: {set_format_str(asyncio.all_tasks())}")
+    await message.answer("Информация для дебаггинга отправлена в лог.")
 
 
 @dp.message_handler()
