@@ -1,3 +1,5 @@
+from loguru import logger
+
 import requests
 import json
 import os
@@ -19,7 +21,7 @@ try:
     cond_description = json.load(
             open('weather_cond_description.json', 'r', encoding='utf-8'))
 except OSError as e:
-    print(f"Ошибка чтения файла {e.filename}:\n {e.strerror}")
+    logger.exception("Ошибка чтения файла")
 
 
 def get_forecast_from_API(up_to_days_from_now: int=1) -> Any:
@@ -32,7 +34,8 @@ def get_forecast_from_API(up_to_days_from_now: int=1) -> Any:
         if YANDEX_WEATHER_API_KEY is None:
             raise exceptions.GettingEnvVarError('Не удалось получить API-ключ сервиса прогноза погоды') 
     except exceptions.GettingEnvVarError as e:
-        print(f"Ошибка доступа к переменной окружения:\n{e}")
+        logger.exception("Ошибка доступа к переменной окружения:")
+
     payload = {'lat': usr_lat,
                'lon': usr_lon,
                'lang': usr_lang,
@@ -46,10 +49,10 @@ def get_forecast_from_API(up_to_days_from_now: int=1) -> Any:
                                         timeout=10)
         forecast_response.raise_for_status()
     except requests.exceptions.HTTPError as e:
-        print(f"Ошибка HTTP:\n{e.strerror}")
+        logger.exception("Ошибка HTTP:")
         return None
     except requests.exceptions.RequestException as e:
-        print(f"Ошибка соединения с сервером погоды:\n{e.strerror}")
+        logger.exception("Ошибка соединения с сервером погоды:")
         return None
     else:
         return forecast_response.json()
@@ -97,6 +100,6 @@ def get_forecast_for_day(days_from_now: int)->str:
     try:
         return get_last_day_forecast_text(get_forecast_from_API(days_from_now))
     except TypeError as e:
-        print(f'Получен некорректный объект с данными о прогнозе:\n{e}')
+        logger.exception("Получен некорректный объект с данными о прогнозе:")
         return "Не удалось получить прогноз."
         

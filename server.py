@@ -1,3 +1,6 @@
+from loguru import logger
+logger.add('log/log.log', retention=1)
+
 from aiogram import Bot, Dispatcher, executor, types
 import aiogram
 import aioschedule
@@ -21,15 +24,15 @@ try:
 except exceptions.GettingEnvVarError as e:
     print(f"Ошибка доступа к переменной окружения:\n{e}")
 except Exception as e:
-    print(f"Ошибка инициализации бота:\n{e}")
+    logger.exception("Ошибка инициализации бота:")
 else:
-    print("Бот инициализирован.")
+    logger.info("Бот инициализирован.")
 
 try:
     username_white_list = json.load(
             open('username_white_list.json', 'r', encoding='utf-8'))
 except OSError as e:
-    print(f"Ошибка чтения файла {e.filename}")
+    logger.exception("Ошибка чтения файла:")
 
 subscribers_for_daily_forecast = set()
 DAILY_FORECAST_TIME = '20:00'
@@ -100,12 +103,12 @@ async def unknown_command_answer(message: types.Message):
 
 
 async def startup_routine(_):
-    print("Бот авторизован и запущен.")
+    logger.info("Бот авторизован и запущен.")
 
 
 if __name__ == '__main__':
     try:
         executor.start_polling(dp, skip_updates=True, on_startup=startup_routine)
     except aiogram.utils.exceptions.Unauthorized as e:
-        print(f"Не удалось авторизовать бота:\n{e.text}")
+        logger.exception("Не удалось авторизовать бота:\n")
     
