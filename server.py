@@ -66,15 +66,21 @@ async def forecast_answer(message: types.Message):
     await message.answer(forecast_answer_text)
 
 
+async def send_test_message(message: types.Message):
+    await bot.send_message(message.from_user.id, f"Test {message.from_user.username}")
+
+
 async def send_tomorrow_forecast(message: types.Message):
     await bot.send_message(message.from_user.id, get_forecast.get_forecast_for_day(1))
 
+
 async def do_daily_forecasting(message: types.Message):
 
-    aioschedule.every().day.at(DAILY_FORECAST_TIME).do(send_tomorrow_forecast, message=message)
+    job = aioschedule.every().day.at(DAILY_FORECAST_TIME).do(send_tomorrow_forecast, message=message)
     while message.from_user.username in subscribers_for_daily_forecast:
         await aioschedule.run_pending()
         await asyncio.sleep(TASK_LOOP_PERIOD)
+    aioschedule.cancel_job(job)
 
 
 @dp.message_handler(commands=['subscribe', 'sub'])
@@ -93,6 +99,7 @@ async def stop_daily_forecasting(message: types.Message):
         await bot.send_message(message.from_user.id, 'Ты отписан от ежедневного прогноза.')
     else:
         await bot.send_message(message.from_user.id, 'Ты не подписан на ежедневный прогноз.')
+
 
 
 @dp.message_handler()
