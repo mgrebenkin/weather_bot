@@ -22,7 +22,7 @@ try:
     bot = Bot(token=TG_BOT_API_TOKEN)
     dp = Dispatcher(bot)
 except exceptions.GettingEnvVarError as e:
-    print(f"Ошибка доступа к переменной окружения:\n{e}")
+    logger.exception("Ошибка доступа к переменной окружения:")
 except Exception as e:
     logger.exception("Ошибка инициализации бота:")
 else:
