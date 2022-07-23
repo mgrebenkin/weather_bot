@@ -1,3 +1,4 @@
+from __future__ import annotations
 from loguru import logger
 logger.add('log/log.log', retention=1)
 
@@ -48,7 +49,7 @@ try:
 except OSError as e:
     logger.exception("Ошибка чтения файла:")
 
-subscribers_for_daily_forecast = set()
+assigned_jobs: dict[int, aioschedule.Job] = dict()
 DEFAULT_DAILY_FORECAST_TIME = '20:00'
 TASK_LOOP_PERIOD = 30  # seconds
 
@@ -91,17 +92,11 @@ async def send_tomorrow_forecast(user: UserType):
     await bot.send_message(user.id, get_forecast.get_forecast_for_day(1))
 
 
-async def do_daily_forecasting(user: UserType):
-
-    job = aioschedule.every().day.at(user.parameters.sending_time).do(
-            send_tomorrow_forecast, 
-            user=user)
-    while subscribers.is_in_subscribers_cache(user.id):
+async def do_daily_forecasting():
+    while True:
         await aioschedule.run_pending()
         await asyncio.sleep(TASK_LOOP_PERIOD)
         
-    aioschedule.cancel_job(job)
-
 
 @dp.message_handler(commands=['subscribe', 'sub'])
 @auth
@@ -109,8 +104,13 @@ async def start_daily_forecasting(message: types.Message):
     if not subscribers.is_in_subscribers_db(message.from_user.id):
         new_user = make_user_from_message(message, DEFAULT_DAILY_FORECAST_TIME)
         subscribers.add_user(new_user)
-        asyncio.create_task(do_daily_forecasting(new_user))
-        await bot.send_message(message.from_user.id, f'Ты подписан на ежедневный прогноз в {DEFAULT_DAILY_FORECAST_TIME}.')
+        assigned_jobs[new_user.id] = \
+            aioschedule.every().day.at(new_user.parameters.sending_time).do(
+                send_tomorrow_forecast, 
+                user=new_user)
+        await bot.send_message(
+            message.from_user.id, 
+            f'Ты подписан на ежедневный прогноз в {new_user.parameters.sending_time}.')
     else:
         await bot.send_message(message.from_user.id, "Ты уже подписан на ежедневный прогноз.")
 
@@ -119,7 +119,8 @@ async def start_daily_forecasting(message: types.Message):
 @auth
 async def stop_daily_forecasting(message: types.Message):
     if subscribers.is_in_subscribers_cache(message.from_user.id):
-        subscribers.remove_user(message.from_user.id)
+        aioschedule.cancel_job(assigned_jobs.pop(message.from_user.id, None))
+        subscribers.remove_user(message.from_user.id)  
         await bot.send_message(message.from_user.id, 'Ты отписан от ежедневного прогноза.')
     else:
         await bot.send_message(message.from_user.id, 'Ты не подписан на ежедневный прогноз.')
@@ -135,7 +136,13 @@ async def unknown_command_answer(message: types.Message):
 
 async def startup_routine(_):
     for id, parameters in subscribers.get_subscribers_cache().items():
-        asyncio.create_task(do_daily_forecasting(UserType(id, UserParametersType(*parameters))))   
+        user = UserType(id, UserParametersType(*parameters))
+        assigned_jobs[user.id] = \
+            aioschedule.every().day.at(user.parameters.sending_time).do(
+                send_tomorrow_forecast, 
+                user=user)
+
+    asyncio.create_task(do_daily_forecasting())
     logger.info("Бот авторизован и запущен.")
 
 

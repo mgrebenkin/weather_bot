@@ -109,6 +109,15 @@ class Subscribers:
     def get_subscribers_cache(self) -> dict[int, UserParametersType]:
         '''Возвращает копию кэша подписчиковв'''
         return self._subscribers_cache.copy()
+
+    '''def assign_job(self, user: UserType | int, job: Job):
+        if type(user) == UserType:
+            user_id = user.id
+        elif type(user) == int:
+            user_id == user
+        else:
+            raise exceptions.BadUserId("Неверный идентификатор пользователя")
+        self._subscribers_cache[user_id].assigned_job = job'''
     
 
 
