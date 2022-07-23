@@ -8,9 +8,12 @@ import asyncio
 import json
 from dotenv import load_dotenv, find_dotenv
 import os
+import time
 
 import get_forecast
+import subscribers
 import exceptions
+from user_types import UserParametersType, UserType
 
 '''Получение токена бота из файла, подключение к API телеграма и инициализация диспетчера'''
 load_dotenv(find_dotenv())
@@ -19,8 +22,19 @@ try:
     TG_BOT_API_TOKEN = os.getenv('TG_BOT_API_TOKEN')
     if TG_BOT_API_TOKEN is None: 
         raise exceptions.GettingEnvVarError('Не удалось получить токен бота.')
+    DB_PATH = os.getenv('DB_PATH')
+    if DB_PATH is None:
+        raise exceptions.GettingEnvVarError('Не удалось получить путь к базе данных пользователей')
+    
     bot = Bot(token=TG_BOT_API_TOKEN)
     dp = Dispatcher(bot)
+
+    try:
+        subscribers = subscribers.Subscribers(DB_PATH)
+    except Exception as e:
+        logger.exception("Ошибка при создании списка подписанных пользователей:")
+    else:
+        logger.info('Установлено соединение с базой данных и получен список пользователей.')
 except exceptions.GettingEnvVarError as e:
     logger.exception("Ошибка доступа к переменной окружения:")
 except Exception as e:
@@ -37,6 +51,8 @@ except OSError as e:
 subscribers_for_daily_forecast = set()
 DAILY_FORECAST_TIME = '20:00'
 TASK_LOOP_PERIOD = 30  # seconds
+
+
 
 
 def auth(func):
@@ -66,36 +82,43 @@ async def forecast_answer(message: types.Message):
     await message.answer(forecast_answer_text)
 
 
-async def send_test_message(message: types.Message):
-    await bot.send_message(message.from_user.id, f"Test {message.from_user.username}")
+async def send_test_message(user: UserType):
+    await bot.send_message(user.id, 
+    f"Test {user.parameters.name} - {time.localtime().tm_min}:{time.localtime().tm_sec}")
 
 
-async def send_tomorrow_forecast(message: types.Message):
-    await bot.send_message(message.from_user.id, get_forecast.get_forecast_for_day(1))
+async def send_tomorrow_forecast(user: UserType):
+    await bot.send_message(user.id, get_forecast.get_forecast_for_day(1))
 
 
-async def do_daily_forecasting(message: types.Message):
+async def do_daily_forecasting(user: UserType):
 
-    job = aioschedule.every().day.at(DAILY_FORECAST_TIME).do(send_tomorrow_forecast, message=message)
-    while message.from_user.username in subscribers_for_daily_forecast:
-        await aioschedule.run_pending()
+    job = aioschedule.every().day.at(DAILY_FORECAST_TIME).do(send_tomorrow_forecast, user=user)
+    while subscribers.is_in_subscribers_cache(user.id):
         await asyncio.sleep(TASK_LOOP_PERIOD)
+        await aioschedule.run_pending()
+        
     aioschedule.cancel_job(job)
 
 
 @dp.message_handler(commands=['subscribe', 'sub'])
 @auth
 async def start_daily_forecasting(message: types.Message):
-    subscribers_for_daily_forecast.add(message.from_user.username)
-    await bot.send_message(message.from_user.id, f'Ты подписан на ежедневный прогноз в {DAILY_FORECAST_TIME}.')
-    asyncio.create_task(do_daily_forecasting(message))
+    if not subscribers.is_in_subscribers_db(message.from_user.id):
+        subscribers.add_user(
+            UserType(message.from_user.id, UserParametersType(message.from_user.username, '20:00')))
+        await bot.send_message(message.from_user.id, f'Ты подписан на ежедневный прогноз в {DAILY_FORECAST_TIME}.')
+        asyncio.create_task(do_daily_forecasting(
+            UserType(message.from_user.id, UserParametersType(message.from_user.username, '20:00'))))
+    else:
+        await bot.send_message(message.from_user.id, "Ты уже подписан на ежедневный прогноз.")
 
 
 @dp.message_handler(commands=['unsubscribe', 'unsub'])
 @auth
 async def stop_daily_forecasting(message: types.Message):
-    if message.from_user.username in subscribers_for_daily_forecast:
-        subscribers_for_daily_forecast.discard(message.from_user.username)
+    if subscribers.is_in_subscribers_cache(message.from_user.id):
+        subscribers.remove_user(message.from_user.id)
         await bot.send_message(message.from_user.id, 'Ты отписан от ежедневного прогноза.')
     else:
         await bot.send_message(message.from_user.id, 'Ты не подписан на ежедневный прогноз.')
@@ -110,6 +133,8 @@ async def unknown_command_answer(message: types.Message):
 
 
 async def startup_routine(_):
+    for id, parameters in subscribers.get_subscribers_cache().items():
+        asyncio.create_task(do_daily_forecasting(UserType(id, UserParametersType(*parameters))))   
     logger.info("Бот авторизован и запущен.")
 
 

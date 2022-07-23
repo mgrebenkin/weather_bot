@@ -3,6 +3,7 @@ log/
 TODO.txt
 venv/
 .env
+*.db
 weather_response.json
 weather_bot_env/
 yandex_weather_api_key.txt

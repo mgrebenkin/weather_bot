@@ -1,5 +1,6 @@
 from __future__ import annotations
-from typing import Any, TypedDict
+from datetime import time
+from typing import Any, NamedTuple, TypedDict
 
 
 class WeatherResponseInfoType(TypedDict):
@@ -89,6 +90,7 @@ class DayForecastsType(TypedDict):
 
 
 class WeatherResponseType(TypedDict):
+
     info: WeatherResponseInfoType
     fact: dict[str, Any]
     forecasts: list[DayForecastsType] 
