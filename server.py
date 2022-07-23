@@ -13,7 +13,7 @@ import time
 import get_forecast
 import subscribers
 import exceptions
-from user_types import UserParametersType, UserType
+from user_types import UserParametersType, UserType, make_user_from_message
 
 '''Получение токена бота из файла, подключение к API телеграма и инициализация диспетчера'''
 load_dotenv(find_dotenv())
@@ -49,7 +49,7 @@ except OSError as e:
     logger.exception("Ошибка чтения файла:")
 
 subscribers_for_daily_forecast = set()
-DAILY_FORECAST_TIME = '20:00'
+DEFAULT_DAILY_FORECAST_TIME = '20:00'
 TASK_LOOP_PERIOD = 30  # seconds
 
 
@@ -93,10 +93,12 @@ async def send_tomorrow_forecast(user: UserType):
 
 async def do_daily_forecasting(user: UserType):
 
-    job = aioschedule.every().day.at(DAILY_FORECAST_TIME).do(send_tomorrow_forecast, user=user)
+    job = aioschedule.every().day.at(user.parameters.sending_time).do(
+            send_tomorrow_forecast, 
+            user=user)
     while subscribers.is_in_subscribers_cache(user.id):
-        await asyncio.sleep(TASK_LOOP_PERIOD)
         await aioschedule.run_pending()
+        await asyncio.sleep(TASK_LOOP_PERIOD)
         
     aioschedule.cancel_job(job)
 
@@ -105,11 +107,10 @@ async def do_daily_forecasting(user: UserType):
 @auth
 async def start_daily_forecasting(message: types.Message):
     if not subscribers.is_in_subscribers_db(message.from_user.id):
-        subscribers.add_user(
-            UserType(message.from_user.id, UserParametersType(message.from_user.username, '20:00')))
-        await bot.send_message(message.from_user.id, f'Ты подписан на ежедневный прогноз в {DAILY_FORECAST_TIME}.')
-        asyncio.create_task(do_daily_forecasting(
-            UserType(message.from_user.id, UserParametersType(message.from_user.username, '20:00'))))
+        new_user = make_user_from_message(message, DEFAULT_DAILY_FORECAST_TIME)
+        subscribers.add_user(new_user)
+        asyncio.create_task(do_daily_forecasting(new_user))
+        await bot.send_message(message.from_user.id, f'Ты подписан на ежедневный прогноз в {DEFAULT_DAILY_FORECAST_TIME}.')
     else:
         await bot.send_message(message.from_user.id, "Ты уже подписан на ежедневный прогноз.")
 
