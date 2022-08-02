@@ -1,6 +1,5 @@
 from __future__ import annotations
 from loguru import logger
-logger.add('log/log.log', retention=1)
 
 from aiogram import Bot, Dispatcher, executor, types
 import aiogram
@@ -11,31 +10,37 @@ from dotenv import load_dotenv, find_dotenv
 import os
 import time
 
-import get_forecast
-import subscribers
-import exceptions
-from user_types import UserParametersType, UserType, make_user_from_message
+from aiogram.dispatcher import FSMContext
+from aiogram.dispatcher.filters.state import State, StatesGroup
+import fsm_storage
 
-'''Получение токена бота из файла, подключение к API телеграма и инициализация диспетчера'''
+import get_forecast
+import exceptions
+from user_types import UserType
+
+logger.add('log/log.log', retention=1)
+
+"""Получение токена бота из файла, подключение к API телеграма и инициализация диспетчера"""
 load_dotenv(find_dotenv())
 
 try:
     TG_BOT_API_TOKEN = os.getenv('TG_BOT_API_TOKEN')
     if TG_BOT_API_TOKEN is None: 
         raise exceptions.GettingEnvVarError('Не удалось получить токен бота.')
+    bot = Bot(token=TG_BOT_API_TOKEN)
+    
     DB_PATH = os.getenv('DB_PATH')
     if DB_PATH is None:
         raise exceptions.GettingEnvVarError('Не удалось получить путь к базе данных пользователей')
     
-    bot = Bot(token=TG_BOT_API_TOKEN)
-    dp = Dispatcher(bot)
-
     try:
-        subscribers = subscribers.Subscribers(DB_PATH)
+        storage = fsm_storage.FSMStorage(DB_PATH)
     except Exception as e:
         logger.exception("Ошибка при создании списка подписанных пользователей:")
     else:
         logger.info('Установлено соединение с базой данных и получен список пользователей.')
+    dp = Dispatcher(bot, storage=storage)
+
 except exceptions.GettingEnvVarError as e:
     logger.exception("Ошибка доступа к переменной окружения:")
 except Exception as e:
@@ -54,32 +59,58 @@ DEFAULT_DAILY_FORECAST_TIME = '20:00'
 TASK_LOOP_PERIOD = 30  # seconds
 
 
+class FSMMain(StatesGroup):
+    user_sent_location = State()
+    user_subscribed = State()
 
 
 def auth(func):
 
-    async def wrapper(message):
+    async def wrapper(message: types.Message, state: FSMContext):
         if message.from_user.username in username_white_list:
             return await message.reply("Нет доступа", reply=False)
-        return await func(message)
+        return await func(message, state)
 
     return wrapper
 
 
+@dp.message_handler(content_types=types.ContentType.LOCATION)
+@auth
+async def write_user_location(message: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        data['lat'] = message.location.latitude
+        data['lon'] = message.location.longitude
+    if await state.get_state() is None:
+        await FSMMain.user_sent_location.set()
+        await bot.send_message(message.from_user.id, """Теперь ты можешь получать прогноз погоды """ 
+        """для места, где ты находишься""")
+    else:
+        await bot.send_message(message.from_user.id, """Твоя геопозиция обновлена.""")
+
+
+@dp.message_handler(state=None)
+@auth
+async def start(message: types.Message, state: FSMContext):
+    await message.reply('Пришли свою геопозицию.')
+
+
 @dp.message_handler(commands=['start', 'help'])
 @auth
-async def greeting_reply(message: types.Message):
+async def help_reply(message: types.Message):
     await message.reply('Напиши /today для прогноза на сегодня и /tomorrow для прогноза на завтра.\n' +
-        'Напиши /subscribe, чтобы подписаться на ежедневный и напиши /unsubscribe, чтобы отписаться.')
+        'Напиши /subscribe, чтобы подписаться на ежедневный прогноз и напиши /unsubscribe, чтобы отписаться.')
 
 
-@dp.message_handler(commands=['today', 'tomorrow'])
+@dp.message_handler(commands=['today', 'tomorrow'], 
+    state = [FSMMain.user_sent_location, FSMMain.user_subscribed])
 @auth
-async def forecast_answer(message: types.Message):
-    if message.text == '/today':
-        forecast_answer_text = get_forecast.get_forecast_for_day(0)
-    elif message.text == '/tomorrow':
-        forecast_answer_text = get_forecast.get_forecast_for_day(1)
+async def forecast_command(message: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        user = UserType(
+            id=state.user, lat=data['lat'], lon=data['lon'], 
+            sending_time=data['sending_time'])
+        forecast_answer_text = get_forecast.get_forecast_for_day(
+            user, 0 if message.text == '/today' else 1)
     await message.answer(forecast_answer_text)
 
 
@@ -89,7 +120,7 @@ async def send_test_message(user: UserType):
 
 
 async def send_tomorrow_forecast(user: UserType):
-    await bot.send_message(user.id, get_forecast.get_forecast_for_day(1))
+    await bot.send_message(user.id, get_forecast.get_forecast_for_day(user, 1))
 
 
 async def do_daily_forecasting():
@@ -98,33 +129,42 @@ async def do_daily_forecasting():
         await asyncio.sleep(TASK_LOOP_PERIOD)
         
 
-@dp.message_handler(commands=['subscribe', 'sub'])
+@dp.message_handler(commands=['subscribe', 'sub'], state=FSMMain.user_sent_location)
 @auth
-async def start_daily_forecasting(message: types.Message):
-    if not subscribers.is_in_subscribers_db(message.from_user.id):
-        new_user = make_user_from_message(message, DEFAULT_DAILY_FORECAST_TIME)
-        subscribers.add_user(new_user)
-        assigned_jobs[new_user.id] = \
-            aioschedule.every().day.at(new_user.parameters.sending_time).do(
+async def start_daily_forecasting(message: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        data['sending_time'] = DEFAULT_DAILY_FORECAST_TIME
+        subscriber = UserType(
+            id=state.user, lat=data['lat'], lon=data['lon'], 
+            sending_time=data['sending_time'])
+        assigned_jobs[subscriber.id] = \
+            aioschedule.every().day.at(data['sending_time']).do(
                 send_tomorrow_forecast, 
-                user=new_user)
+                user=subscriber)
+        await FSMMain.user_subscribed.set()
         await bot.send_message(
             message.from_user.id, 
-            f'Ты подписан на ежедневный прогноз в {new_user.parameters.sending_time}.')
-    else:
-        await bot.send_message(message.from_user.id, "Ты уже подписан на ежедневный прогноз.")
+            f"""Ты подписан на ежедневный прогноз в {data['sending_time']}.""")
 
 
-@dp.message_handler(commands=['unsubscribe', 'unsub'])
+@dp.message_handler(commands=['subscribe', 'sub'], state=FSMMain.user_subscribed)
 @auth
-async def stop_daily_forecasting(message: types.Message):
-    if subscribers.is_in_subscribers_cache(message.from_user.id):
-        aioschedule.cancel_job(assigned_jobs.pop(message.from_user.id, None))
-        subscribers.remove_user(message.from_user.id)  
-        await bot.send_message(message.from_user.id, 'Ты отписан от ежедневного прогноза.')
-    else:
-        await bot.send_message(message.from_user.id, 'Ты не подписан на ежедневный прогноз.')
+async def start_daily_forecasting(message: types.Message, state: FSMContext):
+    await bot.send_message(message.from_user.id, "Ты уже подписан на ежедневный прогноз.")
 
+
+@dp.message_handler(commands=['unsubscribe', 'unsub'], state=FSMMain.user_subscribed)
+@auth
+async def stop_daily_forecasting(message: types.Message, state: FSMContext):
+    aioschedule.cancel_job(assigned_jobs.pop(message.from_user.id, None))
+    await FSMMain.user_sent_location.set()  
+    await bot.send_message(message.from_user.id, """Ты отписан от ежедневного прогноза.""")
+
+
+@dp.message_handler(commands=['unsubscribe', 'unsub'], state=FSMMain.user_sent_location)
+@auth
+async def stop_daily_forecasting(message: types.Message, state: FSMContext):
+    await bot.send_message(message.from_user.id, """Ты не подписан на ежедневный прогноз.""")
 
 
 @dp.message_handler()
@@ -135,12 +175,12 @@ async def unknown_command_answer(message: types.Message):
 
 
 async def startup_routine(_):
-    for id, parameters in subscribers.get_subscribers_cache().items():
-        user = UserType(id, UserParametersType(*parameters))
-        assigned_jobs[user.id] = \
-            aioschedule.every().day.at(user.parameters.sending_time).do(
+    subscribers_set = await storage.get_subscribers_set()
+    for subscriber in subscribers_set:
+        assigned_jobs[subscriber.id] = \
+            aioschedule.every().day.at(subscriber.sending_time).do(
                 send_tomorrow_forecast, 
-                user=user)
+                user=subscriber)
 
     asyncio.create_task(do_daily_forecasting())
     logger.info("Бот авторизован и запущен.")
@@ -151,4 +191,3 @@ if __name__ == '__main__':
         executor.start_polling(dp, skip_updates=True, on_startup=startup_routine)
     except aiogram.utils.exceptions.Unauthorized as e:
         logger.exception("Не удалось авторизовать бота:\n")
-    
