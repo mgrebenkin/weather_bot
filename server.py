@@ -17,6 +17,7 @@ import fsm_storage
 import get_forecast
 import exceptions
 from user_types import UserType
+import keyboards
 
 logger.add('log/log.log', retention=1)
 
@@ -83,22 +84,24 @@ async def write_user_location(message: types.Message, state: FSMContext):
     if await state.get_state() is None:
         await FSMMain.user_sent_location.set()
         await bot.send_message(message.from_user.id, """Теперь ты можешь получать прогноз погоды """ 
-        """для места, где ты находишься""")
+        """для места, где ты находишься""", reply_markup=keyboards.main_markup)
     else:
-        await bot.send_message(message.from_user.id, """Твоя геопозиция обновлена.""")
+        await bot.send_message(message.from_user.id, """Твоя геопозиция обновлена.""", 
+                                    reply_markup=keyboards.main_markup)
 
 
 @dp.message_handler(state=None)
 @auth
 async def start(message: types.Message, state: FSMContext):
-    await message.reply('Пришли свою геопозицию.')
+    await message.reply('Пришли свою геопозицию.', reply_markup=keyboards.request_location_markup)
 
 
-@dp.message_handler(commands=['start', 'help'])
+@dp.message_handler(commands=['start', 'help'], state=FSMMain.all_states)
 @auth
-async def help_reply(message: types.Message):
+async def help_reply(message: types.Message, state: FSMContext):
     await message.reply('Напиши /today для прогноза на сегодня и /tomorrow для прогноза на завтра.\n' +
-        'Напиши /subscribe, чтобы подписаться на ежедневный прогноз и напиши /unsubscribe, чтобы отписаться.')
+        'Напиши /subscribe, чтобы подписаться на ежедневный прогноз и напиши /unsubscribe, чтобы отписаться.', 
+        reply_markup=keyboards.main_markup)
 
 
 @dp.message_handler(commands=['today', 'tomorrow'], 
