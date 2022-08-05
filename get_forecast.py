@@ -4,9 +4,10 @@ import requests
 import json
 import os
 from typing import Any
-from user_types import UserType
 
+from user_types import UserType
 from weather_objects_types import WeatherResponseType
+
 import exceptions
 
 usr_lang = 'ru_RU'
@@ -49,6 +50,7 @@ def get_forecast_from_API(user: UserType, up_to_days_from_now: int=1) -> Any:
         logger.exception("Ошибка соединения с сервером погоды:")
         return None
     else:
+        logger.info(f"""Получен ответ на запрос {forecast_response.request.url} для пользователя {user.id} с координатами ({user.lat}, {user.lon}).""")
         return forecast_response.json()
 
      

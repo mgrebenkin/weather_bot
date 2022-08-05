@@ -56,7 +56,7 @@ except OSError as e:
     logger.exception("Ошибка чтения файла:")
 
 assigned_jobs: dict[int, aioschedule.Job] = dict()
-DEFAULT_DAILY_FORECAST_TIME = '20:00'
+DEFAULT_DAILY_FORECAST_TIME = '15:31'
 TASK_LOOP_PERIOD = 30  # seconds
 
 
@@ -144,6 +144,7 @@ async def start_daily_forecasting(message: types.Message, state: FSMContext):
             aioschedule.every().day.at(data['sending_time']).do(
                 send_tomorrow_forecast, 
                 user=subscriber)
+        logger.info(f"""Запущена новая рассылка по подписке для пользователя {subscriber}.""")
         await FSMMain.user_subscribed.set()
         await bot.send_message(
             message.from_user.id, 
@@ -160,6 +161,7 @@ async def start_daily_forecasting(message: types.Message, state: FSMContext):
 @auth
 async def stop_daily_forecasting(message: types.Message, state: FSMContext):
     aioschedule.cancel_job(assigned_jobs.pop(message.from_user.id, None))
+    logger.info(f"""Прекращена рассылка по подписке для пользователя c id {message.from_user.id}.""")
     await FSMMain.user_sent_location.set()  
     await bot.send_message(message.from_user.id, """Ты отписан от ежедневного прогноза.""")
 
@@ -184,6 +186,7 @@ async def startup_routine(_):
             aioschedule.every().day.at(subscriber.sending_time).do(
                 send_tomorrow_forecast, 
                 user=subscriber)
+        logger.info(f"""На старте запущена рассылка для пользователя {subscriber}.""")
 
     asyncio.create_task(do_daily_forecasting())
     logger.info("Бот авторизован и запущен.")
