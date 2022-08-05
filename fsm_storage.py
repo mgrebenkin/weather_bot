@@ -35,7 +35,7 @@ class FSMStorage(BaseStorage):
 
         return UserType(id=row_dict['user'],
             lat=row_dict['lat'],
-            lon=row_dict['lat'],
+            lon=row_dict['lon'],
             sending_time=row_dict['sending_time'])
 
 
@@ -164,8 +164,7 @@ class FSMStorage(BaseStorage):
                 f"""UPDATE FSMData
                 SET lat = :lat, lon = :lon, sending_time = :sending_time
                 WHERE (chat = :chat) OR (user = :user)""",
-                data
-            )
+                data)
             self.__db_connection.commit()
             cursor.close()
         except Exception:
