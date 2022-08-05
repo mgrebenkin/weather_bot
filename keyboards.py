@@ -4,12 +4,15 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 main_markup = ReplyKeyboardMarkup(
     keyboard=[
         [
-            KeyboardButton(text=r'/today'),
-            KeyboardButton(text=r'/tomorrow')
+            KeyboardButton(text='Прогноз на сегодня'),
+            KeyboardButton(text='Прогноз на завтра')
         ],
         [
-            KeyboardButton(text=r'/subscribe'),
-            KeyboardButton(text=r'/unsubscribe')
+            KeyboardButton(text='Подписаться'),
+            KeyboardButton(text='Отписаться')
+        ],
+        [
+            KeyboardButton(text='Обновить местоположение', request_location=True)
         ]
     ], resize_keyboard=True
 )

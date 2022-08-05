@@ -1,7 +1,7 @@
 from __future__ import annotations
 from loguru import logger
 
-from aiogram import Bot, Dispatcher, executor, types
+from aiogram import Bot, Dispatcher, executor, types, filters
 import aiogram
 import aioschedule
 import asyncio
@@ -56,7 +56,7 @@ except OSError as e:
     logger.exception("Ошибка чтения файла:")
 
 assigned_jobs: dict[int, aioschedule.Job] = dict()
-DEFAULT_DAILY_FORECAST_TIME = '15:31'
+DEFAULT_DAILY_FORECAST_TIME = '20:00'
 TASK_LOOP_PERIOD = 30  # seconds
 
 
@@ -75,7 +75,7 @@ def auth(func):
     return wrapper
 
 
-@dp.message_handler(content_types=types.ContentType.LOCATION)
+@dp.message_handler(content_types=types.ContentType.LOCATION, state="*")
 @auth
 async def write_user_location(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
@@ -84,27 +84,33 @@ async def write_user_location(message: types.Message, state: FSMContext):
     if await state.get_state() is None:
         await FSMMain.user_sent_location.set()
         await bot.send_message(message.from_user.id, """Теперь ты можешь получать прогноз погоды """ 
-        """для места, где ты находишься""", reply_markup=keyboards.main_markup)
+        """для места, где ты находишься. Пришли местоположение еще раз,"""
+        """ чтобы обновить свое его.""", reply_markup=keyboards.main_markup)
     else:
-        await bot.send_message(message.from_user.id, """Твоя геопозиция обновлена.""", 
+        await bot.send_message(message.from_user.id, """Твое местоположение обновлено.""", 
                                     reply_markup=keyboards.main_markup)
 
 
 @dp.message_handler(state=None)
 @auth
 async def start(message: types.Message, state: FSMContext):
-    await message.reply('Пришли свою геопозицию.', reply_markup=keyboards.request_location_markup)
+    await message.reply('Пришли свое местоположение.', reply_markup=keyboards.request_location_markup)
 
 
-@dp.message_handler(commands=['start', 'help'], state=FSMMain.all_states)
+@dp.message_handler(commands=['start', 'help', 'помощь'], state=FSMMain.all_states)
 @auth
 async def help_reply(message: types.Message, state: FSMContext):
-    await message.reply('Напиши /today для прогноза на сегодня и /tomorrow для прогноза на завтра.\n' +
-        'Напиши /subscribe, чтобы подписаться на ежедневный прогноз и напиши /unsubscribe, чтобы отписаться.', 
+    await message.reply(
+        """Нажми нужную кнопку для прогноза на сегодня или на завтра.\n"""
+        """Нажми кнопку "Подписаться", чтобы подписаться на ежедневный прогноз """
+        """и "Отписаться", чтобы отписаться.\n"""
+        """Ты можешь обновить свое местоположение, нажав соответствующую кнопку """
+        """и отправив боту свою геопозицию.""",
         reply_markup=keyboards.main_markup)
 
 
-@dp.message_handler(commands=['today', 'tomorrow'], 
+@dp.message_handler(filters.Text(
+        equals=['Прогноз на сегодня', 'Прогноз на завтра'], ignore_case=True), 
     state = [FSMMain.user_sent_location, FSMMain.user_subscribed])
 @auth
 async def forecast_command(message: types.Message, state: FSMContext):
@@ -113,7 +119,7 @@ async def forecast_command(message: types.Message, state: FSMContext):
             id=state.user, lat=data['lat'], lon=data['lon'], 
             sending_time=data['sending_time'])
         forecast_answer_text = get_forecast.get_forecast_for_day(
-            user, 0 if message.text == '/today' else 1)
+            user, 0 if message.text == 'Прогноз на сегодня' else 1)
     await message.answer(forecast_answer_text)
 
 
@@ -132,7 +138,9 @@ async def do_daily_forecasting():
         await asyncio.sleep(TASK_LOOP_PERIOD)
         
 
-@dp.message_handler(commands=['subscribe', 'sub'], state=FSMMain.user_sent_location)
+@dp.message_handler(filters.Text(
+        equals=['Подписаться', 'sub'], ignore_case=True), 
+    state=FSMMain.user_sent_location)
 @auth
 async def start_daily_forecasting(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
@@ -151,13 +159,17 @@ async def start_daily_forecasting(message: types.Message, state: FSMContext):
             f"""Ты подписан на ежедневный прогноз в {data['sending_time']}.""")
 
 
-@dp.message_handler(commands=['subscribe', 'sub'], state=FSMMain.user_subscribed)
+@dp.message_handler(filters.Text(
+        equals=['Подписаться', 'sub'], ignore_case=True), 
+    state=FSMMain.user_subscribed)
 @auth
 async def start_daily_forecasting(message: types.Message, state: FSMContext):
     await bot.send_message(message.from_user.id, "Ты уже подписан на ежедневный прогноз.")
 
 
-@dp.message_handler(commands=['unsubscribe', 'unsub'], state=FSMMain.user_subscribed)
+@dp.message_handler(filters.Text(
+        equals=['Отписаться', 'unsub'], ignore_case=True), 
+    state=FSMMain.user_subscribed)
 @auth
 async def stop_daily_forecasting(message: types.Message, state: FSMContext):
     aioschedule.cancel_job(assigned_jobs.pop(message.from_user.id, None))
@@ -166,7 +178,9 @@ async def stop_daily_forecasting(message: types.Message, state: FSMContext):
     await bot.send_message(message.from_user.id, """Ты отписан от ежедневного прогноза.""")
 
 
-@dp.message_handler(commands=['unsubscribe', 'unsub'], state=FSMMain.user_sent_location)
+@dp.message_handler(filters.Text(
+        equals=['Отписаться', 'unsub'], ignore_case=True),
+    state=FSMMain.user_sent_location)
 @auth
 async def stop_daily_forecasting(message: types.Message, state: FSMContext):
     await bot.send_message(message.from_user.id, """Ты не подписан на ежедневный прогноз.""")
@@ -175,8 +189,13 @@ async def stop_daily_forecasting(message: types.Message, state: FSMContext):
 @dp.message_handler()
 @auth
 async def unknown_command_answer(message: types.Message):
-    await message.reply('Напиши /today для прогноза на сегодня и /tomorrow для прогноза на завтра.\n' +
-        'Напиши /subscribe или /sub чтобы подписаться на ежедневный и напиши /unsubscribe или /unsub, чтобы отписаться.')
+    await message.reply(
+        """Нажми нужную кнопку для прогноза на сегодня или на завтра.\n"""
+        """Нажми кнопку "Подписаться", чтобы подписаться на ежедневный прогноз """
+        """и "Отписаться", чтобы отписаться.\n"""
+        """Ты можешь обновить свое местоположение, нажав соответствующую кнопку """
+        """и отправив боту свою геопозицию.""",
+        reply_markup=keyboards.main_markup)
 
 
 async def startup_routine(_):
