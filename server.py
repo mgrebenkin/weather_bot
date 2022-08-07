@@ -81,14 +81,19 @@ async def write_user_location(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['lat'] = message.location.latitude
         data['lon'] = message.location.longitude
-    if await state.get_state() is None:
-        await FSMMain.user_sent_location.set()
-        await bot.send_message(message.from_user.id, """Теперь ты можешь получать прогноз погоды """ 
-        """для места, где ты находишься. Пришли местоположение еще раз,"""
-        """ чтобы обновить свое его.""", reply_markup=keyboards.main_markup)
-    else:
-        await bot.send_message(message.from_user.id, """Твое местоположение обновлено.""", 
-                                    reply_markup=keyboards.main_markup)
+        if await state.get_state() is None:
+            await FSMMain.user_sent_location.set()
+            await bot.send_message(message.from_user.id, """Теперь ты можешь получать прогноз погоды """ 
+            """для места, где ты находишься. Пришли местоположение еще раз,"""
+            """ чтобы обновить свое его.""", reply_markup=keyboards.main_markup)
+        else:
+            await bot.send_message(message.from_user.id, """Твое местоположение обновлено.""", 
+                                        reply_markup=keyboards.main_markup)
+            if await state.get_state() == FSMMain.user_subscribed.state:
+                updated_user = UserType(
+                    id=state.user, lat=message.location.latitude, lon=message.location.longitude, 
+                    sending_time=data['sending_time'])
+                assigned_jobs[str(message.from_user.id)].job_func.keywords['user'] = updated_user
 
 
 @dp.message_handler(state=None)
