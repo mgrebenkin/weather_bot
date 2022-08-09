@@ -136,7 +136,7 @@ class FSMStorage(BaseStorage):
         try:    
             chat, user = self.resolve_key(chat, user)
             cursor = self.__db_connection.cursor()
-            cursor.row_factory = self.__dict_factory
+            cursor.row_factory = self.__dict_factory #запрос будет возвращать словарь
             cursor.execute(
                 f"""SELECT lat, lon, sending_time
                 FROM FSMData

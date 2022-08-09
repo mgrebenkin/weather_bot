@@ -1,19 +1,16 @@
 from __future__ import annotations
 from loguru import logger
 
+import aiogram, aioschedule, asyncio
 from aiogram import Bot, Dispatcher, executor, types, filters
-import aiogram
-import aioschedule
-import asyncio
-import json
-from dotenv import load_dotenv, find_dotenv
-import os
-import time
-
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
-import fsm_storage
 
+import time
+
+from constants import TG_BOT_API_TOKEN, DB_PATH, TASK_LOOP_PERIOD, DEFAULT_DAILY_FORECAST_TIME
+from constants import username_white_list
+import fsm_storage
 import get_forecast
 import exceptions
 from user_types import UserType
@@ -22,43 +19,23 @@ import keyboards
 logger.add('log/log.log', retention=1)
 
 """Получение токена бота из файла, подключение к API телеграма и инициализация диспетчера"""
-load_dotenv(find_dotenv())
 
 try:
-    TG_BOT_API_TOKEN = os.getenv('TG_BOT_API_TOKEN')
-    if TG_BOT_API_TOKEN is None: 
-        raise exceptions.GettingEnvVarError('Не удалось получить токен бота.')
-    bot = Bot(token=TG_BOT_API_TOKEN)
-    
-    DB_PATH = os.getenv('DB_PATH')
-    if DB_PATH is None:
-        raise exceptions.GettingEnvVarError('Не удалось получить путь к базе данных пользователей')
-    
-    try:
-        storage = fsm_storage.FSMStorage(DB_PATH)
-    except Exception as e:
-        logger.exception("Ошибка при создании списка подписанных пользователей:")
-    else:
-        logger.info('Установлено соединение с базой данных и получен список пользователей.')
-    dp = Dispatcher(bot, storage=storage)
+    storage = fsm_storage.FSMStorage(DB_PATH)
+except Exception:
+    logger.exception("Ошибка при создании списка подписанных пользователей:")
+else:
+    logger.info('Установлено соединение с базой данных и получен список пользователей.')
 
-except exceptions.GettingEnvVarError as e:
-    logger.exception("Ошибка доступа к переменной окружения:")
-except Exception as e:
+try:
+    bot = Bot(token=TG_BOT_API_TOKEN)
+    dp = Dispatcher(bot, storage=storage)
+except Exception:
     logger.exception("Ошибка инициализации бота:")
 else:
     logger.info("Бот инициализирован.")
 
-try:
-    username_white_list = json.load(
-            open('username_white_list.json', 'r', encoding='utf-8'))
-except OSError as e:
-    logger.exception("Ошибка чтения файла:")
-
 assigned_jobs: dict[int, aioschedule.Job] = dict()
-DEFAULT_DAILY_FORECAST_TIME = '20:00'
-TASK_LOOP_PERIOD = 30  # seconds
-
 
 class FSMMain(StatesGroup):
     user_sent_location = State()
