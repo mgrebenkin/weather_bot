@@ -8,7 +8,8 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 
 import time
 
-from constants import TG_BOT_API_TOKEN, DB_PATH, TASK_LOOP_PERIOD, DEFAULT_DAILY_FORECAST_TIME
+from constants import TG_BOT_API_TOKEN, DB_PATH, TASK_LOOP_PERIOD, \
+    DEFAULT_DAILY_FORECAST_TIME, AUTH_ENABLED
 from constants import username_white_list
 import fsm_storage
 import get_forecast
@@ -45,7 +46,8 @@ class FSMMain(StatesGroup):
 def auth(func):
 
     async def wrapper(message: types.Message, state: FSMContext):
-        if message.from_user.username in username_white_list:
+
+        if not (message.from_user.username in username_white_list) and (AUTH_ENABLED):
             return await message.reply("Нет доступа", reply=False)
         return await func(message, state)
 

@@ -20,7 +20,12 @@ try:
     if YANDEX_WEATHER_API_KEY is None:
         raise exceptions.GettingEnvVarError('Не удалось получить API-ключ сервиса прогноза погоды')
 
-except exceptions.GettingEnvVarError as e:
+    AUTH_ENABLED= getenv('ENABLE_AUTH', 'False').lower() in ['true', 't', '1', 'y', 'yes']
+    if AUTH_ENABLED is None:
+        raise exceptions.GettingEnvVarError("""Не удалось получить флаг включения авторизации. """ 
+        """Авторизация по умолчанию отключена.""")
+
+except exceptions.GettingEnvVarError:
     logger.exception("Ошибка доступа к переменной окружения:\n")
 
 YANDEX_WEATHER_REQUEST_URL = 'https://api.weather.yandex.ru/v2/forecast'
@@ -30,10 +35,11 @@ DEFAULT_DAILY_FORECAST_TIME = '20:00'
 TASK_LOOP_PERIOD = 30  # seconds
 
 try:
-    username_white_list = json.load(
-            open('username_white_list.json', 'r', encoding='utf-8'))
     weather_condition_description = json.load(
             open('weather_cond_description.json', 'r', encoding='utf-8'))
-except OSError as e:
+    if AUTH_ENABLED:
+        username_white_list = json.load(
+                open('username_white_list.json', 'r', encoding='utf-8'))
+except OSError:
     username_white_list=list()
     logger.exception("Ошибка чтения файла:")
