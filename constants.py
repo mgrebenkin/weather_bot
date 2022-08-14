@@ -40,6 +40,8 @@ try:
     if AUTH_ENABLED:
         username_white_list = json.load(
                 open('username_white_list.json', 'r', encoding='utf-8'))
+    else:
+        username_white_list=list()
 except OSError:
-    username_white_list=list()
     logger.exception("Ошибка чтения файла:")
+    username_white_list=list()
